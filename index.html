@@ -1,0 +1,49 @@
+<html>
+<title>Time Tracker</title>
+<head>
+<script>
+    const logger = {
+        loggerKey: "keyTime",
+        getStorageItem: () => {
+            return localStorage.getItem(logger.loggerKey); 
+        },
+        saveStorageItem: (items) => {
+            localStorage.setItem(logger.loggerKey, JSON.stringify(items))
+        },
+        getDateItems: () => {
+            return logger.getStorageItem() ? JSON.parse(logger.getStorageItem()): [];
+        },
+        getDate: () => {
+            return new Date().toDateString();
+        },
+        getTick: () => {
+            return new Date().getTime();
+        },
+        getDateItem: () => {
+            return { createdDate: logger.getDate(), tick: logger.getTick() };
+        },
+        getDateModel: () => {
+            return { createdDate: logger.getDate(), ticks: [] };
+        },
+        getCurrentDateObj: (fullTimes) => {
+            return fullTimes.find(x => x.createdDate === logger.getDateItem().createdDate);
+        },
+        logTime: () => {
+            const fullTimes = logger.getDateItems();
+            if(!logger.getCurrentDateObj(fullTimes)){
+                fullTimes.push(logger.getDateModel())
+            }
+            const fullTime = logger.getCurrentDateObj(fullTimes);
+            if(fullTime){
+                fullTime.ticks = fullTime.ticks ? fullTime.ticks : [];
+                fullTime.ticks.push(logger.getTick());
+            }
+            logger.saveStorageItem(fullTimes);
+        }
+    }
+</script>
+</head>
+<body>
+<button id="btnLogger" onClick="logger.logTime()">Log Time</button>
+</body>
+</html>
