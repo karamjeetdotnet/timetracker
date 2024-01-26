@@ -1,49 +1,372 @@
 <html>
 <title>Time Tracker</title>
+
 <head>
-<script>
-    const logger = {
-        loggerKey: "keyTime",
-        getStorageItem: () => {
-            return localStorage.getItem(logger.loggerKey); 
-        },
-        saveStorageItem: (items) => {
-            localStorage.setItem(logger.loggerKey, JSON.stringify(items))
-        },
-        getDateItems: () => {
-            return logger.getStorageItem() ? JSON.parse(logger.getStorageItem()): [];
-        },
-        getDate: () => {
-            return new Date().toDateString();
-        },
-        getTick: () => {
-            return new Date().getTime();
-        },
-        getDateItem: () => {
-            return { createdDate: logger.getDate(), tick: logger.getTick() };
-        },
-        getDateModel: () => {
-            return { createdDate: logger.getDate(), ticks: [] };
-        },
-        getCurrentDateObj: (fullTimes) => {
-            return fullTimes.find(x => x.createdDate === logger.getDateItem().createdDate);
-        },
-        logTime: () => {
-            const fullTimes = logger.getDateItems();
-            if(!logger.getCurrentDateObj(fullTimes)){
-                fullTimes.push(logger.getDateModel())
-            }
-            const fullTime = logger.getCurrentDateObj(fullTimes);
-            if(fullTime){
-                fullTime.ticks = fullTime.ticks ? fullTime.ticks : [];
-                fullTime.ticks.push(logger.getTick());
-            }
-            logger.saveStorageItem(fullTimes);
+    <style>
+        table,
+        th,
+        td {
+            border: 1px solid;
         }
-    }
-</script>
+
+        @media print {
+
+            .no-print,
+            .no-print * {
+                display: none !important;
+            }
+        }
+    </style>
+    <script>
+        const logger = {
+            loggerKey: "keyTime",
+            organizationKey: "organizations",
+            organizationSelectId: "organizationSelect",
+            monthYearSelectId: "monthYearSelect",
+            taskKey: "tasks",
+            taskId: "task",
+            getStorageItem: () => {
+                return localStorage.getItem(logger.loggerKey);
+            },
+            getOrganizationData: () => {
+                return localStorage.getItem(logger.organizationKey);
+            },
+            getTasksData: () => {
+                return localStorage.getItem(logger.taskKey);
+            },
+            saveStorageItem: (items) => {
+                localStorage.setItem(logger.loggerKey, JSON.stringify(items))
+            },
+            saveTaskItem: (items) => {
+                localStorage.setItem(logger.taskKey, JSON.stringify(items))
+            },
+            getOrganizations: () => {
+                return logger.getOrganizationData() ? JSON.parse(logger.getOrganizationData()) : [];
+            },
+            getTasks: () => {
+                return logger.getTasksData() ? JSON.parse(logger.getTasksData()) : [];
+            },
+            getDateItems: () => {
+                return logger.getStorageItem() ? JSON.parse(logger.getStorageItem()) : [];
+            },
+            getDateFromEpoch: (epoch) => {
+                return epoch ? new Date(epoch) : new Date();
+            },
+            getDate: () => {
+                const fakeDate = document.getElementById("fakeDate").value;
+                if (fakeDate) {
+                    const epoch = Date.parse(fakeDate);
+                    if (isNaN(epoch)) { throw new Error('Date is not valid!'); }
+                    else {
+                        document.getElementById("fakeDate").value = ""
+                        return logger.getDateFromEpoch(epoch);
+                    }
+                }
+                return logger.getDateFromEpoch();
+            },
+            getDateString: () => {
+                return logger.getDate().toDateString();
+            },
+            getTick: () => {
+                return logger.getDate().getTime();
+            },
+            getDateItem: () => {
+                return { tick: logger.getTick() };
+            },
+            getModel: () => {
+                return { oid: logger.getOrganizationId(), ticks: [] };
+            },
+            getCurrentObj: (fullTimes) => {
+                return fullTimes.find(x => x.oid === logger.getOrganizationId());
+            },
+            getOrganizationId: () => {
+                return document.getElementById(logger.organizationSelectId).value
+            },
+            getMonthYearId: () => {
+                return document.getElementById(logger.monthYearSelectId).value
+            },
+            fillOrganizations: () => {
+                const organizationsData = logger.getOrganizations();
+                const organizationSelectItems = [];
+                organizationsData.forEach((organization) => {
+                    organizationSelectItems.push(logger.getSelectModel(organization.name, organization.id))
+                })
+                logger.fillDataToSelect(logger.organizationSelectId, organizationSelectItems)
+            },
+            fillData: () => {
+                logger.fillOrganizations();
+                logger.fillMonthYear();
+                logger.showSelectedData();
+                logger.fillLogTasks();
+            },
+            getSelectModel: (text, value) => {
+                return { text: text, value: value }
+            },
+            fillDataToSelect: (selectId, dataItems) => {
+                const select = document.getElementById(selectId);
+                select.innerHTML = "";
+                for (var i = 0; i < dataItems.length; i++) {
+                    var opt = document.createElement('option');
+                    opt.value = dataItems[i].value;
+                    opt.innerHTML = dataItems[i].text;
+                    select.appendChild(opt);
+                }
+            },
+            getTimeDiff: (now, prev) => {
+                const diffMillis = now - prev;
+                const seconds = Math.floor(diffMillis / 1000);
+                const secondsPart = seconds % 60;
+                const minutes = Math.floor(seconds / 60);
+                const minutesPart = minutes % 60;
+                const hoursPart = Math.floor(minutes / 60);
+                return hoursPart + ":" + minutesPart + ":" + secondsPart;
+            },
+            addTimes: (startTime, endTime) => {
+                var times = [0, 0, 0]
+                var max = times.length
+
+                var a = (startTime || '').split(':')
+                var b = (endTime || '').split(':')
+
+                // normalize time values
+                for (var i = 0; i < max; i++) {
+                    a[i] = isNaN(parseInt(a[i])) ? 0 : parseInt(a[i])
+                    b[i] = isNaN(parseInt(b[i])) ? 0 : parseInt(b[i])
+                }
+
+                // store time values
+                for (var i = 0; i < max; i++) {
+                    times[i] = a[i] + b[i]
+                }
+
+                var hours = times[0]
+                var minutes = times[1]
+                var seconds = times[2]
+
+                if (seconds >= 60) {
+                    var m = (seconds / 60) << 0
+                    minutes += m
+                    seconds -= 60 * m
+                }
+
+                if (minutes >= 60) {
+                    var h = (minutes / 60) << 0
+                    hours += h
+                    minutes -= 60 * h
+                }
+
+                return ('0' + hours).slice(-2) + ':' + ('0' + minutes).slice(-2) + ':' + ('0' + seconds).slice(-2)
+            },
+            showTotalTimeSpent: () => {
+                document.getElementById("totalTime").innerHTML = "Total Time: " + Array.from(document.getElementsByClassName("time_diff")).
+                    reduce((partialSum, a) => logger.addTimes(partialSum, a.innerText), "0:0:0");
+            },
+            showSelectedData: () => {
+                logger.showTimeSheet();
+                logger.showTotalTimeSpent();
+                logger.showSelectedTasks();
+            },
+            getTime: (tick) => {
+                return logger.getDateFromEpoch(tick).toLocaleString([], { hour: '2-digit', minute: '2-digit', seconds: '2-digit' })
+            },
+            showTimeSheet: () => {
+                const currentMonth = logger.getMonthYearId().split('-');
+                const ticks = logger.getOrganizationDataItem()?.ticks?.filter(tick =>
+                    logger.getDateFromEpoch(tick).getMonth() == currentMonth[0] &&
+                    logger.getDateFromEpoch(tick).getFullYear() == currentMonth[1]
+                ) ?? [];
+                ticks.sort();
+                const selectedItems = ticks.reduce((prev, tick) => {
+                    const dateString = logger.getDateFromEpoch(tick).toDateString();
+                    let currentObj = prev.find(x => x.createdDate == dateString);
+                    if (!currentObj) {
+                        currentObj = {
+                            createdDate: dateString,
+                            ticks: []
+                        }
+                        prev.push(currentObj);
+                    }
+                    currentObj.ticks.push(tick)
+                    return prev
+                }, []);
+                let markup = "<table>"
+                markup += "<thead><tr><th>Date</th><th>Logs</th><th>Duration</th></tr></thead>";
+                markup += "<tbody>";
+                let isLoginTime = true;
+                let prevTime = 0;
+                selectedItems.forEach(record => {
+                    markup += "<tr>";
+                    markup += "<td>" + record.createdDate + "</td>";
+                    markup += "<td>";
+
+                    const diffs = [];
+                    record.ticks.forEach(tick => {
+                        markup += isLoginTime ?
+                            "<div><strong>Login Time:</strong> " + logger.getTime(tick)
+                            :
+                            " <strong>Logout Time:</strong> " + logger.getTime(tick) + "</div><br/>";
+                        if (!isLoginTime) {
+                            diffs.push(logger.getTimeDiff(tick, prevTime))
+                        }
+                        prevTime = tick;
+                        isLoginTime = !isLoginTime;
+                    })
+                    markup += "</td><td>";
+                    diffs.forEach(diff => {
+                        markup += "<div class=\"time_diff\">" + diff + "</div></br>";
+                    })
+                    markup += "</td></tr>";
+                }
+                )
+                markup += "</tbody>";
+                markup += "<tfoot><tr><th colspan=\"3\" id=\"totalTime\"></th></tr><tfoot>";
+                markup += "</table>";
+                document.getElementById("result").innerHTML = markup
+            },
+            getOrganizationDataItem: () => {
+                return logger.getCurrentObj(logger.getDateItems());
+            },
+            fillMonthYear: () => {
+                const monthNames = ["January", "February", "March", "April", "May", "June",
+                    "July", "August", "September", "October", "November", "December"
+                ];
+                const ticks = logger.getOrganizationDataItem()?.ticks ?? [];
+                ticks.sort();
+                let yearMonths =
+                    ticks.map(tick => `${logger.getDateFromEpoch(tick).getMonth()}-${logger.getDateFromEpoch(tick).getFullYear()}`);
+                yearMonths = yearMonths.filter((item, pos) => yearMonths.indexOf(item) == pos);
+                const monthYearItems = [];
+                yearMonths.forEach(yearMonth => {
+                    const monthYearSplit = yearMonth.split('-');
+                    monthYearItems.push(logger.getSelectModel(`${monthNames[monthYearSplit[0]]}-${monthYearSplit[1]}`, yearMonth))
+                })
+                logger.fillDataToSelect(logger.monthYearSelectId, monthYearItems);
+            },
+            logTime: () => {
+                const fullTimes = logger.getDateItems();
+                if (!logger.getCurrentObj(fullTimes)) {
+                    fullTimes.push(logger.getModel())
+                }
+                const fullTime = logger.getCurrentObj(fullTimes);
+                if (fullTime) {
+                    fullTime.ticks = fullTime.ticks ? fullTime.ticks : [];
+                    fullTime.ticks.push(logger.getTick());
+                }
+                logger.saveStorageItem(fullTimes);
+                logger.showSelectedData();
+            },
+            createTask: () => {
+                let tasks = logger.getTasks();
+                let organization = tasks.find(x => x.oid == logger.getOrganizationId());
+                if (!organization) {
+                    organization = {
+                        oid: logger.getOrganizationId(),
+                        tasks: []
+                    }
+                    tasks.push(organization)
+                }
+                const dateString = logger.getDateString();
+                let organizationTask = organization.tasks.find(x => x.createdDate == dateString);
+                if (!organizationTask) {
+                    organizationTask = {
+                        createdDate: dateString,
+                        items: []
+                    }
+                    organization.tasks.push(organizationTask)
+                }
+                organizationTask.items.push(document.getElementById(logger.taskId).value);
+                document.getElementById(logger.taskId).value = "";
+                logger.saveTaskItem(tasks);
+                logger.showSelectedData()
+            },
+            getOrganizationTasks: () => {
+                const tasks = logger.getTasks().find(x => x.oid == logger.getOrganizationId())?.tasks ?? [];
+                tasks.sort((a, b) => {
+                    return new Date(a.createdDate) - new Date(b.createdDate);
+                })
+                return tasks;
+            },
+            showSelectedTasks: () => {
+                let tasks = logger.getOrganizationTasks();
+
+                let markup = document.getElementById("result").innerHTML;
+
+                markup += "<table style=\"margin-top:10px\"><thead><tr><th colspan=\"2\">Tasks</th></tr></thead><tbody>";
+                tasks.forEach(task => {
+                    markup += "<tr><td>" + task.createdDate + "</td><td><ul>";
+                    task.items.forEach(item => {
+                        markup += "<li>" + item + "</li>";
+                    })
+                    markup += "</ul></td></tr>";
+                })
+                markup += "</tbody></table>";
+                document.getElementById("result").innerHTML = markup;
+            },
+            fillLogTasks: () => {
+                const dataType = document.getElementById("dataType").value;
+                const showSelectItems = [];
+                if (dataType == "log") {
+                    const ticks = logger.getOrganizationDataItem()?.ticks ?? [];
+                    ticks.sort();
+                    ticks.forEach(tick => {
+                        showSelectItems.push(logger.getSelectModel(new Date(tick), tick))
+                    })
+                } else {
+                    logger.getOrganizationTasks().forEach(task => {
+                        task.items.forEach((item, index) => {
+                            showSelectItems.push(logger.getSelectModel(task.createdDate + "-" + item, new Date(task.createdDate).getTime() + "-" + index))
+                        })
+                    })
+                }
+                logger.fillDataToSelect("dataTypeItem", showSelectItems)
+            },
+            removeLogTask: () => {
+                const dataType = document.getElementById("dataType").value;
+                const dataTypeItem = document.getElementById("dataTypeItem").value;
+                const showSelectItems = [];
+                if (dataType == "log") {
+                    const fullTimes = logger.getDateItems();
+                    const fullTime = logger.getCurrentObj(fullTimes);
+                    if (fullTime) {
+                        fullTime.ticks = fullTime.ticks.filter(x => x != dataTypeItem);
+                    }
+                    logger.saveStorageItem(fullTimes);
+                } else {
+                    const tasks = logger.getTasks();
+                    const organization = tasks.find(x => x.oid == logger.getOrganizationId());
+                    const organizationTask = organization.tasks.find(x => new Date(x.createdDate).getTime() == dataTypeItem.split("-")[0]);
+                    organizationTask.items.splice(dataTypeItem.split("-")[1], 1);
+                    if (organizationTask.items.length == 0) {
+                        organization.tasks = organization.tasks.filter(x => new Date(x.createdDate).getTime() != dataTypeItem.split("-")[0])
+                    }
+                    logger.saveTaskItem(tasks);
+                }
+                logger.fillData();
+            }
+        }
+    </script>
 </head>
+
 <body>
-<button id="btnLogger" onClick="logger.logTime()">Log Time</button>
+    <label for="organizationSelect">Organizations: </label> <select id="organizationSelect"></select>
+    <label for="monthYearSelect">Month - Year: </label> <select id="monthYearSelect"></select>
+    <div class="no-print"><label for="fakeDate">Fake Date: </label> <input tite="format YYYY-MM-DD HH:mm:ss.sss"
+            id="fakeDate"></input>
+        <button id="btnLogger" onClick="logger.logTime()">Log Time</button>
+        <button id="btnShowData" onClick="logger.showSelectedData()">Show Data</button>
+        <label for="task">Task: </label> <input id="task"></input>
+        <button id="btnTask" onClick="logger.createTask()">Create Task</button>
+        <select id="dataType" onChange="logger.fillLogTasks()">
+            <option value="log">Log</option>
+            <option value="task">Task</option>
+        </select>
+        <select id="dataTypeItem"></select>
+        <button onClick="logger.removeLogTask()">Remove</button>
+    </div><br />
+    <div id="result"></div>
+    <script>
+        logger.fillData();
+    </script>
 </body>
+
 </html>
