@@ -25,6 +25,13 @@
             monthYearSelectId: "monthYearSelect",
             taskKey: "tasks",
             taskId: "task",
+            getStorageKeys: () => {
+                return [
+                    logger.loggerKey,
+                    logger.organizationKey,
+                    logger.taskKey
+                ]
+            },
             getStorageItem: () => {
                 return localStorage.getItem(logger.loggerKey);
             },
@@ -342,6 +349,28 @@
                     logger.saveTaskItem(tasks);
                 }
                 logger.fillData();
+            },
+            exportData: () => {
+                const storageObj = {};
+                logger.getStorageKeys().forEach(key => {
+                    const data = localStorage.getItem(key);
+                    if (data) {
+                        storageObj[key] = JSON.parse(data)
+                    }
+                })
+                var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(storageObj));
+                var dlAnchorElem = document.createElement('a');
+                dlAnchorElem.setAttribute("href", dataStr);
+                dlAnchorElem.setAttribute("download", "export-data.json");
+                dlAnchorElem.click();
+            },
+            importData: (fileControl) => {
+                fileControl.files[0].text().then(txt => {
+                    const fullData = JSON.parse(txt);
+                    logger.getStorageKeys().forEach(key => {
+                        localStorage.setItem(key, JSON.stringify(fullData[key]));
+                    })
+                })
             }
         }
     </script>
@@ -362,6 +391,8 @@
         </select>
         <select id="dataTypeItem"></select>
         <button onClick="logger.removeLogTask()">Remove</button>
+        <button onClick="logger.exportData()">Export Data</button>
+        <input type="file" id="exportFile"  accept=".json" onChange="logger.importData(this)" />
     </div><br />
     <div id="result"></div>
     <script>
